@@ -1,7 +1,7 @@
 import pandas as pd
 import bnlearn
 
-def learn_structure(train_data : pd.DataFrame, use_bnlearn : bool = False, methodtype : str = 'hc', scoretype : str = 'bic'):
+def learn_structure(train_data : pd.DataFrame, use_bnlearn : bool = False, methodtype : str = 'hc', scoretype : str = 'bic') -> dict[str, list]:
     """Learns the structure of a Bayesian Network given training data.
 
     Parameters:
