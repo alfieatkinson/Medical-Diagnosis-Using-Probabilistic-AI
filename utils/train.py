@@ -8,8 +8,8 @@ def get_train_test_data(df : pd.DataFrame, target : str, test_size : float | int
     Parameters:
         df (DataFrame): A pandas dataframe containing the data.
         target (str): The name of the target column.
-        test_size (float or int): If float, should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split. If int, represents the absolute number of test samples
-        random_state (int): Controls the shuffling applied to the data before applying the split. Pass an int for reproducible output across multiple function calls.
+        test_size (float or int): If float, should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the test split. If int, represents the absolute number of test samples. Defaults to 0.2.
+        random_state (int): Controls the shuffling applied to the data before applying the split. Pass an int for reproducible output across multiple function calls. Defaults to 42.
     """
     X = df.drop(columns=[target])
     y = df[target]
