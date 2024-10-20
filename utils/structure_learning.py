@@ -9,6 +9,9 @@ def learn_structure(train_data : pd.DataFrame, use_bnlearn : bool = False, metho
         use_bnlearn (bool, optional): Whether to use bnlearns structure learning or self-implemented methods. Defaults to False.
         methodtype (str, optional): The method of structure learning to use. Defaults to 'hc'.
         scoretype (str, optional): The scoring method to use. Defaults to 'bic'.
+        
+    Returns:
+        dict[str, list]: A dictionary containing the model information.
     """
     if use_bnlearn:
         return bnlearn.structure_learning.fit(train_data, methodtype=methodtype, scoretype=scoretype)
