@@ -11,7 +11,7 @@ def learn_structure(train_data : pd.DataFrame, use_bnlearn : bool = False, metho
         scoretype (str, optional): The scoring method to use. Defaults to 'bic'.
         
     Returns:
-        dict[str, list]: A dictionary containing the model information.
+        model (dict[str, list]): A dictionary containing the model information.
     """
     if use_bnlearn:
         return bnlearn.structure_learning.fit(train_data, methodtype=methodtype, scoretype=scoretype)
