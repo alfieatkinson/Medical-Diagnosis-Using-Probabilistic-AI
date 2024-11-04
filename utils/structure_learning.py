@@ -6,7 +6,7 @@ import numpy as np
 def bic_score(data : pd.DataFrame, model : dict[str, list]) -> float:
     """Calculates the BIC score for the given data and model.
 
-    Args:
+    Parameters:
         data (pd.DataFrame): The data to score.
         model (dict[str, list]): The model to score.
 
@@ -37,7 +37,7 @@ def bic_score(data : pd.DataFrame, model : dict[str, list]) -> float:
 def get_score(data : pd.DataFrame, model : dict[str, list], scoretype : str = 'bic') -> float:
     """Scores the given data and model.
 
-    Args:
+    Parameters:
         data (pd.DataFrame): The data to score.
         model (dict[str, list]): The model to score.
         scoretype (str, optional): The scoring method to use. Defaults to 'bic'.
