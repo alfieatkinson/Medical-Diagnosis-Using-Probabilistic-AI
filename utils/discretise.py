@@ -33,7 +33,7 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
     Parameters:
         df (pd.DataFrame): The input DataFrame containing numerical columns to discretise.
         method (str): The method to use for determining the number of bins ('sturges' or 'freedman-diaconis'). Defaults to 'sturges'.
-        nbins (int, optional): The number of bins to use. If specified, it overrides the method selection. Defaults to None.
+        nbins (Optional[int]): The number of bins to use. If specified, it overrides the method selection. Defaults to None.
 
     Returns:
         pd.DataFrame: The DataFrame with discretised numerical columns.
@@ -41,19 +41,28 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
     Raises:
         ValueError: If an invalid method is specified.
     """
+    
+    def assign_bins(column: pd.Series, num_bins: int) -> pd.Series:
+        """Helper function to assign bins to a numerical column."""
+        return pd.cut(column, bins=num_bins, labels=[f'Bin{i+1}' for i in range(num_bins)])
+
     if nbins is not None:
         for col in df.select_dtypes(include=[np.number]).columns:
-            # Use the specified number of bins for discretisation
-            df[col] = pd.cut(df[col], bins=nbins, labels=[f'Bin{i+1}' for i in range(nbins)])
+            df[col] = assign_bins(df[col], nbins)
         return df
     
     for col in df.select_dtypes(include=[np.number]).columns:
+        if df[col].nunique() == 1:
+            df[col] = assign_bins(df[col], 1)
+            continue
+        
         if method == 'sturges':
-            bins = sturges_formula(len(df[col]))
+            num_bins = sturges_formula(len(df[col]))
         elif method == 'freedman-diaconis':
-            bins = freedman_diaconis_rule(df[col])
+            num_bins = freedman_diaconis_rule(df[col])
         else:
             raise ValueError("Method must be 'sturges' or 'freedman-diaconis'.")
-        df[col] = pd.cut(df[col], bins=bins, labels=[f'Bin{i+1}' for i in range(bins)])
+        
+        df[col] = assign_bins(df[col], num_bins)
     
     return df
