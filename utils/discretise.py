@@ -44,7 +44,10 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
     
     def assign_bins(column: pd.Series, num_bins: int) -> pd.Series:
         """Helper function to assign bins to a numerical column."""
-        return pd.cut(column, bins=num_bins, labels=[f'Bin{i+1}' for i in range(num_bins)])
+        unique_vals = column.nunique()
+        if num_bins > unique_vals:
+            num_bins = unique_vals
+        return pd.cut(column, bins=num_bins, labels=[i for i in range(num_bins)])
 
     if nbins is not None:
         for col in df.select_dtypes(include=[np.number]).columns:
