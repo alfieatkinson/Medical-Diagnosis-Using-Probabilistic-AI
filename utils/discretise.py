@@ -47,7 +47,7 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
         unique_vals = column.nunique()
         if num_bins > unique_vals:
             num_bins = unique_vals
-        return pd.cut(column, bins=num_bins, labels=[i for i in range(num_bins)])
+        return pd.cut(column, bins=num_bins, labels=False)
 
     if nbins is not None:
         for col in df.select_dtypes(include=[np.number]).columns:
