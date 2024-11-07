@@ -1,7 +1,8 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
-import bnlearn as bn
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 def plot_directed_graph(model : dict[str, list]):
     """Plots a directed graph given a model.
@@ -90,7 +91,10 @@ def plot_bn_models(models: dict, max_columns: int = 4):
         ax = axes[i]  # Get the current axis for the subplot
         
         # Extract the DAG object from the model
-        dag = model['model']  # This is the DAG object inside the model dictionary
+        try:
+            dag = model['model']
+        except KeyError:
+            dag = model
         
         # Get the edges from the DAG and convert to a NetworkX graph
         G = nx.DiGraph(dag.edges())  # Extract edges from the DAG object
@@ -107,4 +111,38 @@ def plot_bn_models(models: dict, max_columns: int = 4):
 
     # Adjust layout to prevent overlapping and show the plot
     plt.tight_layout(pad=2.0)
+    plt.show()
+    
+def plot_confusion_matrices(predictions_dict, y_true, max_plots_per_row=4, cmap='Blues'):
+    """
+    Plots confusion matrices for each prediction in the predictions dictionary.
+
+    Args:
+    predictions_dict: dict, key: title (str), value: list of predictions (list of integers where 0 is Non-Demented, 1 is Demented)
+    y_true: list or pandas Series, true labels (0 or 1 for Non-Demented or Demented)
+    max_plots_per_row: int, maximum number of confusion matrices per row in the plot grid
+    """
+    num_plots = len(predictions_dict)
+    num_rows = (num_plots + max_plots_per_row - 1) // max_plots_per_row  # Calculate the number of rows needed
+
+    # Create a figure with subplots
+    plt.figure(figsize=(max_plots_per_row * 5, num_rows * 5))
+
+    # Iterate over the dictionary and plot each confusion matrix
+    for i, (title, predictions) in enumerate(predictions_dict.items()):
+        row = i // max_plots_per_row
+        col = i % max_plots_per_row
+        ax = plt.subplot(num_rows, max_plots_per_row, i + 1)
+
+        # Compute the confusion matrix
+        conf_matrix = confusion_matrix(y_true, predictions)
+
+        # Plot the confusion matrix using a heatmap
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap=cmap, xticklabels=['Non-Demented', 'Demented'], yticklabels=['Non-Demented', 'Demented'], ax=ax)
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('Actual')
+        ax.set_title(title)
+
+    # Adjust layout for better readability
+    plt.tight_layout()
     plt.show()
