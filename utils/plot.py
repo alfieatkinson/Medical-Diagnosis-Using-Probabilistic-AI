@@ -1,6 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
+import bnlearn as bn
 
 def plot_directed_graph(model : dict[str, list]):
     """Plots a directed graph given a model.
@@ -58,4 +59,52 @@ def plot_bins_barcharts(df: pd.DataFrame):
         ax.axis('off')
 
     plt.tight_layout()  # Adjust layout to prevent overlapping
+    plt.show()
+    
+def plot_bn_models(models: dict, max_columns: int = 4):
+    """Plot multiple Bayesian Network models side by side using networkx and matplotlib.
+
+    Parameters:
+        models (dict): Dictionary where keys are titles and values are bnlearn models to plot.
+        max_columns (int): Maximum number of columns for subplots in a row.
+    """
+    num_models = len(models)
+    
+    if num_models < 1:
+        return 0
+    
+    # Calculate the number of rows needed for subplots
+    num_rows = (num_models + max_columns - 1) // max_columns
+    
+    # Create a figure with subplots
+    fig, axes = plt.subplots(num_rows, max_columns, figsize=(5 * max_columns, 5 * num_rows))
+    
+    # If there's only one plot, axes will be a single object, not an array.
+    if num_models == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()  # Flatten axes to make iteration easier if it's an array
+
+    # Iterate over the models and plot them in the subplots
+    for i, (title, model) in enumerate(models.items()):
+        ax = axes[i]  # Get the current axis for the subplot
+        
+        # Extract the DAG object from the model
+        dag = model['model']  # This is the DAG object inside the model dictionary
+        
+        # Get the edges from the DAG and convert to a NetworkX graph
+        G = nx.DiGraph(dag.edges())  # Extract edges from the DAG object
+        
+        # Draw the graph on the axis
+        pos = nx.spring_layout(G, seed=42)
+        nx.draw(G, pos, with_labels=True, ax=ax, node_size=500, node_color='#FF69B4', font_size=10, font_weight='bold', arrows=True)
+        
+        ax.set_title(title)
+
+    # Remove any unused subplots (if any)
+    for j in range(num_models, len(axes)):
+        axes[j].axis('off')
+
+    # Adjust layout to prevent overlapping and show the plot
+    plt.tight_layout(pad=2.0)
     plt.show()
