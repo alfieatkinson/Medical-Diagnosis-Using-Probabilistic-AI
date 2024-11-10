@@ -28,6 +28,9 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score).
         True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
+    # Convert integer-encoded categories to strings
+    df = df.astype(str)
+    
     # Setup k-fold cross-validation
     kf = KFold(n_splits=nsplits)
     
