@@ -113,35 +113,112 @@ def plot_bn_models(models: dict, max_columns: int = 4):
     plt.tight_layout(pad=2.0)
     plt.show()
     
-def plot_confusion_matrices(predictions_dict, y_true, max_plots_per_row=4, cmap='Blues'):
-    """
-    Plots confusion matrices for each prediction in the predictions dictionary.
+def plot_confusion_matrix(confusion: list[int], cmap='Blues'):
+    """Plot confusion matrix using seaborn heatmap.
 
-    Args:
-    predictions_dict: dict, key: title (str), value: list of predictions (list of integers where 0 is Non-Demented, 1 is Demented)
-    y_true: list or pandas Series, true labels (0 or 1 for Non-Demented or Demented)
-    max_plots_per_row: int, maximum number of confusion matrices per row in the plot grid
+    Parameters:
+        confusion (list[int]): The confusion matrix to be plotted.
+        cmap: The cmap to use.
     """
-    num_plots = len(predictions_dict)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(confusion, annot=True, fmt='d', cmap=cmap, 
+                xticklabels=['Predicted Negative', 'Predicted Positive'], 
+                yticklabels=['Actual Negative', 'Actual Positive'])
+    plt.title("Confusion Matrix")
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
+    
+def plot_metrics(metrics: dict[str, float], title: str):
+    """
+    Plot performance metrics (accuracy, precision, recall, F1 score) as bar charts.
+
+    Parameters:
+        metrics (dict[str, float]): Dictionary containing performance metrics (e.g., accuracy, precision, recall, f1_score).
+        title (str): Title of the plot.
+    """
+    # Extracting metric values
+    metric_names = list(metrics.keys())
+    metric_values = list(metrics.values())
+
+    # Creating the bar chart
+    plt.figure(figsize=(8, 6))
+    plt.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6'])
+    
+    # Adding title and labels
+    plt.title(f"Model Metrics: {title}")
+    plt.xlabel("Metric")
+    plt.ylabel("Score")
+    
+    # Displaying the plot
+    plt.ylim(0, 1)  # Since these are probabilities (between 0 and 1)
+    plt.show()
+    
+def plot_confusion_matrices(confusion_dict: dict[str, list[int]], max_plots_per_row=4, cmap='Blues'):
+    """
+    Plots confusion matrices for each model in the confusion_dict.
+
+    Parameters:
+        confusion_dict (dict[str, list[int]]): key: title (str), value: confusion matrix (2D list or numpy array).
+        max_plots_per_row (int): maximum number of confusion matrices per row in the plot grid.
+        cmap (str): colormap to use for the heatmap.
+    """
+    num_plots = len(confusion_dict)
     num_rows = (num_plots + max_plots_per_row - 1) // max_plots_per_row  # Calculate the number of rows needed
 
     # Create a figure with subplots
     plt.figure(figsize=(max_plots_per_row * 5, num_rows * 5))
 
     # Iterate over the dictionary and plot each confusion matrix
-    for i, (title, predictions) in enumerate(predictions_dict.items()):
+    for i, (title, confusion) in enumerate(confusion_dict.items()):
         row = i // max_plots_per_row
         col = i % max_plots_per_row
         ax = plt.subplot(num_rows, max_plots_per_row, i + 1)
 
-        # Compute the confusion matrix
-        conf_matrix = confusion_matrix(y_true, predictions)
-
         # Plot the confusion matrix using a heatmap
-        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap=cmap, xticklabels=['Non-Demented', 'Demented'], yticklabels=['Non-Demented', 'Demented'], ax=ax)
+        sns.heatmap(confusion, annot=True, fmt='d', cmap=cmap, 
+                    xticklabels=['Predicted Negative', 'Predicted Positive'], 
+                    yticklabels=['Actual Negative', 'Actual Positive'], ax=ax)
         ax.set_xlabel('Predicted')
         ax.set_ylabel('Actual')
         ax.set_title(title)
+
+    # Adjust layout for better readability
+    plt.tight_layout()
+    plt.show()
+    
+def plot_metrics_graphs(metrics_dict: dict[str, dict[str, float]], max_plots_per_row=4):
+    """
+    Plots performance metrics (accuracy, precision, recall, F1 score) as bar charts for each model.
+
+    Parameters:
+        metrics_dict (dict[str, dict[str, float]]): key: title (str), value: metrics dictionary (accuracy, precision, recall, f1_score)
+        max_plots_per_row (int): maximum number of metric plots per row in the plot grid
+    """
+    num_plots = len(metrics_dict)
+    num_rows = (num_plots + max_plots_per_row - 1) // max_plots_per_row  # Calculate the number of rows needed
+
+    # Create a figure with subplots
+    plt.figure(figsize=(max_plots_per_row * 5, num_rows * 5))
+
+    # Iterate over the dictionary and plot each metric graph
+    for i, (title, metrics) in enumerate(metrics_dict.items()):
+        row = i // max_plots_per_row
+        col = i % max_plots_per_row
+        ax = plt.subplot(num_rows, max_plots_per_row, i + 1)
+
+        # Extracting metric names and values
+        metric_names = list(metrics.keys())
+        metric_values = list(metrics.values())
+
+        # Creating the bar chart
+        ax.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6'])
+        
+        # Adding title and labels
+        ax.set_title(title)
+        ax.set_xlabel("Metric")
+        ax.set_ylabel("Score")
+        ax.set_ylim(0, 1)  # Since these are probabilities (between 0 and 1)
 
     # Adjust layout for better readability
     plt.tight_layout()
