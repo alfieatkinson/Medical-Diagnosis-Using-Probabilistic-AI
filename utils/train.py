@@ -61,22 +61,34 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
             parameter_kwargs = {}
         model = bn.parameter_learning.fit(model, train_data, **parameter_kwargs)
         
+        if not model['model'].check_model():
+            print("Model has not been trained correctly.")
+        
         # Drop columns from test data not in the model nodes
         model_nodes = model['model'].nodes()
         test_columns = test_data.columns.tolist()
         columns_to_drop = [col for col in test_columns if col not in model_nodes]
         test_data_filtered = test_data.drop(columns=columns_to_drop)
         
-        # Evaluate model on the test set
+        # Evaluate model on the test set #FIXME - Something is not working here, keep getting KeyError on predict in name_to_no from bnlearn
         y_true = test_data[target]
-        y_pred = bn.predict(model, test_data_filtered, target) #FIXME - KeyError from bnlearn
+        y_true = np.array(y_true, dtype=str)
+        y_pred = bn.predict(model, test_data_filtered, target)
+        y_pred = np.array(y_pred, dtype=float)
         y_pred = np.argmax(y_pred, axis=1)
         
+        y_true = np.array(y_true, dtype=int)
+        y_pred = np.array(y_pred, dtype=int)
+        
         print("Predicted Values:", y_pred)
+        print("Actual Values:", y_true)
         
         # Collect true and predicted values for confusion matrix
         all_y_true.extend(y_true)
         all_y_pred.extend(y_pred)
+        
+        print(y_true)
+        print(y_pred)
         
         # Compute evaluation metrics
         accuracy_results.append(accuracy_score(y_true, y_pred))
