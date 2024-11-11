@@ -192,10 +192,6 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
     brier_score_results = []
     log_loss_results = []
 
-    # List to store all true and predicted labels for confusion matrix
-    all_y_true = []
-    all_y_pred = []
-
     # Start timer for cross-validation
     start_time = time.time()
 
@@ -232,8 +228,13 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         variable_order, means, var = learned_model.predict(df_predict)
 
         # The 'means' variable contains the predicted values for all target variables
-        pred = means[:, variable_order.index(target)]  # Extract predicted values for 'Status'
-        all_y_true.extend(test_data[target].values)
+        pred = means[:, variable_order.index(target)]  # Extract predicted values for target
+        # Apply sigmoid to map continuous predictions to [0, 1]
+        pred = 1 / (1 + np.exp(-pred))
+
+        # Initialize true and predicted labels for the current fold
+        all_y_true = test_data[target].values
+        all_y_pred = []
 
         # Threshold the continuous predicted values to binary classification
         pred_binary = [1 if p > 0.5 else 0 for p in pred]  # Apply a 0.5 threshold to convert to binary
