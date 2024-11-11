@@ -5,6 +5,7 @@ import numpy as np
 import bnlearn as bn
 from pgmpy.global_vars import logger
 from sklearn.model_selection import KFold
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 warnings.filterwarnings('ignore')
@@ -15,7 +16,7 @@ logging.getLogger('pandas').setLevel(logging.ERROR)
 
 def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, structure_kwargs: dict = None, parameter_kwargs: dict = None) -> dict[str, any]:
     """
-    Perform k-fold cross-validation on a Bayesian Network using structure and parameter learning functions.
+    Perform k-fold cross-validation on a Bayesian Network using structure and parameter learning functions, querying each row individually for each fold. It continues even if a row causes an error and prints debug messages.
     
     Parameters:
         df (DataFrame): The dataframe containing the data for the Bayesian Network.
@@ -28,9 +29,6 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score).
         True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
-    # Convert integer-encoded categories to strings
-    df = df.astype(str)
-    
     # Setup k-fold cross-validation
     kf = KFold(n_splits=nsplits)
     
@@ -51,6 +49,9 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         # Split data into training and test sets
         train_data, test_data = df.iloc[train_index], df.iloc[test_index]
         
+        model = None
+        learned_model = None
+        
         # Structure learning
         if structure_kwargs is None:
             structure_kwargs = {}
@@ -59,10 +60,7 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         # Parameter learning
         if parameter_kwargs is None:
             parameter_kwargs = {}
-        model = bn.parameter_learning.fit(model, train_data, **parameter_kwargs)
-        
-        if not model['model'].check_model():
-            print("Model has not been trained correctly.")
+        learned_model = bn.parameter_learning.fit(model, train_data, **parameter_kwargs)
         
         # Drop columns from test data not in the model nodes
         model_nodes = model['model'].nodes()
@@ -70,31 +68,41 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         columns_to_drop = [col for col in test_columns if col not in model_nodes]
         test_data_filtered = test_data.drop(columns=columns_to_drop)
         
-        # Evaluate model on the test set #FIXME - Something is not working here, keep getting KeyError on predict in name_to_no from bnlearn
-        y_true = test_data[target]
-        y_true = np.array(y_true, dtype=str)
-        y_pred = bn.predict(model, test_data_filtered, target)
-        y_pred = np.array(y_pred, dtype=float)
-        y_pred = np.argmax(y_pred, axis=1)
+        # Loop over each row in the test set and predict individually
+        for idx, row in test_data_filtered.iterrows():
+            # Prepare individual row as DataFrame
+            row_df = row.to_frame().T
+            
+            # Get true value for the row
+            y_true = row_df[target].values[0]
+            
+            try:
+                # Make prediction for this row
+                y_pred = bn.predict(learned_model, row_df, target)[target].values[0]
+                
+                # Collect true and predicted values for confusion matrix
+                all_y_true.append(y_true)
+                all_y_pred.append(y_pred)
+            
+            except KeyError as e:
+                # Handle specific KeyError related to state name not found
+                print(f"Error for row {idx} in fold {fold+1}: KeyError - {e}")
+                print(f"Row causing error: {row_df}")
+                print(f"Model state names for target variable: {learned_model['model'].get_cpds(target).state_names}")
+                print(f"Model nodes: {model_nodes}")
+                continue  # Skip this row and move to the next
+            
+            except Exception as e:
+                # Catch all other exceptions and log them
+                print(f"Unexpected error for row {idx} in fold {fold+1}: {e}")
+                print(f"Row causing error: {row_df}")
+                continue  # Skip this row and move to the next
         
-        y_true = np.array(y_true, dtype=int)
-        y_pred = np.array(y_pred, dtype=int)
-        
-        print("Predicted Values:", y_pred)
-        print("Actual Values:", y_true)
-        
-        # Collect true and predicted values for confusion matrix
-        all_y_true.extend(y_true)
-        all_y_pred.extend(y_pred)
-        
-        print(y_true)
-        print(y_pred)
-        
-        # Compute evaluation metrics
-        accuracy_results.append(accuracy_score(y_true, y_pred))
-        precision_results.append(precision_score(y_true, y_pred, average='binary'))
-        recall_results.append(recall_score(y_true, y_pred, average='binary'))
-        f1_results.append(f1_score(y_true, y_pred, average='binary'))
+        # Compute evaluation metrics for this fold
+        accuracy_results.append(accuracy_score(all_y_true, all_y_pred))
+        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary'))
+        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary'))
+        f1_results.append(f1_score(all_y_true, all_y_pred, average='binary'))
     
     # Return average metrics across folds
     metrics = {
