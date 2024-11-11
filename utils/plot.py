@@ -131,10 +131,10 @@ def plot_confusion_matrix(confusion: list[int], cmap='Blues'):
     
 def plot_metrics(metrics: dict[str, float], title: str):
     """
-    Plot performance metrics (accuracy, precision, recall, F1 score) as bar charts.
+    Plot performance metrics (accuracy, precision, recall, f1_score, roc_auc, brier_score, log_loss) as bar charts.
 
     Parameters:
-        metrics (dict[str, float]): Dictionary containing performance metrics (e.g., accuracy, precision, recall, f1_score).
+        metrics (dict[str, float]): Dictionary containing performance metrics.
         title (str): Title of the plot.
     """
     # Extracting metric values
@@ -143,7 +143,7 @@ def plot_metrics(metrics: dict[str, float], title: str):
 
     # Creating the bar chart
     plt.figure(figsize=(8, 6))
-    plt.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6'])
+    plt.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6', '#32CD32', '#FFD700'])
     
     # Adding title and labels
     plt.title(f"Model Metrics: {title}")
@@ -151,15 +151,15 @@ def plot_metrics(metrics: dict[str, float], title: str):
     plt.ylabel("Score")
     
     # Displaying the plot
-    plt.ylim(0, 1)  # Since these are probabilities (between 0 and 1)
+    plt.ylim(0, 1)  # Since these are probabilities (between 0 and 1) for most metrics
     plt.show()
     
-def plot_confusion_matrices(confusion_dict: dict[str, list[int]], max_plots_per_row=4, cmap='Blues'):
+def plot_confusion_matrices(confusion_dict: dict[str, list], max_plots_per_row=4, cmap='Blues'):
     """
     Plots confusion matrices for each model in the confusion_dict.
 
     Parameters:
-        confusion_dict (dict[str, list[int]]): key: title (str), value: confusion matrix (2D list or numpy array).
+        confusion_dict (dict[str, list]): key: title (str), value: confusion matrix (2D numpy array).
         max_plots_per_row (int): maximum number of confusion matrices per row in the plot grid.
         cmap (str): colormap to use for the heatmap.
     """
@@ -189,10 +189,10 @@ def plot_confusion_matrices(confusion_dict: dict[str, list[int]], max_plots_per_
     
 def plot_metrics_graphs(metrics_dict: dict[str, dict[str, float]], max_plots_per_row=4):
     """
-    Plots performance metrics (accuracy, precision, recall, F1 score) as bar charts for each model.
+    Plots performance metrics (accuracy, precision, recall, F1 score, roc_auc, brier_score, log_loss) as bar charts for each model.
 
     Parameters:
-        metrics_dict (dict[str, dict[str, float]]): key: title (str), value: metrics dictionary (accuracy, precision, recall, f1_score)
+        metrics_dict (dict[str, dict[str, float]]): key: title (str), value: metrics dictionary (accuracy, precision, recall, f1_score, roc_auc, brier_score, log_loss)
         max_plots_per_row (int): maximum number of metric plots per row in the plot grid
     """
     num_plots = len(metrics_dict)
@@ -212,7 +212,7 @@ def plot_metrics_graphs(metrics_dict: dict[str, dict[str, float]], max_plots_per
         metric_values = list(metrics.values())
 
         # Creating the bar chart
-        ax.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6'])
+        ax.bar(metric_names, metric_values, color=['#800080', '#8A2BE2', '#FF69B4', '#DA70D6', '#32CD32', '#FFD700'])
         
         # Adding title and labels
         ax.set_title(title)
@@ -223,3 +223,64 @@ def plot_metrics_graphs(metrics_dict: dict[str, dict[str, float]], max_plots_per
     # Adjust layout for better readability
     plt.tight_layout()
     plt.show()
+    
+def plot_confusion_matrices_from_evaluation(evaluation: dict, max_plots_per_row=4, cmap='Blues'):
+    """
+    Extracts confusion matrices for all models in the evaluation dictionary and calls plot_confusion_matrices.
+    
+    Parameters:
+        evaluation (dict): The evaluation dictionary containing confusion matrices for each model.
+        max_plots_per_row (int): Maximum number of confusion matrices per row in the plot grid.
+        cmap (str): The colormap to use for the heatmap.
+    """
+    confusion_dict = {model_name: evaluation[model_name]['confusion_matrix'] for model_name in evaluation}
+    plot_confusion_matrices(confusion_dict, max_plots_per_row, cmap)
+
+
+def plot_metrics_from_evaluation(evaluation: dict, max_plots_per_row=4):
+    """
+    Extracts metrics for all models in the evaluation dictionary and calls plot_metrics_graphs.
+    
+    Parameters:
+        evaluation (dict): The evaluation dictionary containing metrics for each model.
+        max_plots_per_row (int): Maximum number of metric plots per row in the plot grid.
+    """
+    metrics_dict = {model_name: evaluation[model_name]['metrics']['classification'] for model_name in evaluation}
+    plot_metrics_graphs(metrics_dict, max_plots_per_row)
+    
+def display_evaluation_results(evaluation: dict):
+    """
+    Displays the evaluation results including all metrics, confusion matrix, and time taken for each model.
+    
+    Parameters:
+        evaluation (dict): The evaluation dictionary containing the results for each model.
+    """
+    for model_name, results in evaluation.items():
+        print(f"\n{model_name}:")
+        
+        # Metrics
+        metrics = results['metrics']
+        print("  Metrics:")
+
+        # Print all metrics (including non-classification metrics)
+        for metric, value in metrics.items():
+            if isinstance(value, dict):  # Nested dictionary (classification metrics)
+                print(f"    {metric.capitalize()}:")
+                for sub_metric, sub_value in value.items():
+                    if sub_metric in ['accuracy', 'precision', 'recall', 'f1_score']:
+                        print(f"      {sub_metric.capitalize()}: {sub_value * 100:.2f}%")
+                    else:
+                        print(f"      {sub_metric.capitalize()}: {sub_value}")
+            else:
+                if metric in ['accuracy', 'precision', 'recall', 'f1_score']:
+                    print(f"    {metric.capitalize()}: {value * 100:.2f}%")
+                else:
+                    print(f"    {metric.capitalize()}: {value}")
+
+        # Time Taken
+        time_taken = results['time_taken']
+        print(f"  Time Taken: {time_taken:.2f} seconds")
+
+        # Confusion Matrix
+        print(f'''  Confusion Matrix: {results['confusion_matrix'][0]}
+                    {results['confusion_matrix'][1]}''')
