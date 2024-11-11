@@ -3,15 +3,13 @@ import logging
 import pandas as pd 
 import numpy as np 
 import bnlearn as bn
-import pgmpy.models as pm
-import pgmpy.factors.continuous as cf
 from pgmpy.global_vars import logger
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-from pgmpy.estimators import MaximumLikelihoodEstimator, HillClimbSearch, PC, BDeuScore
+from pgmpy.estimators import HillClimbSearch, PC, BDeuScore
 from pgmpy.models import LinearGaussianBayesianNetwork
-from pgmpy.inference import VariableElimination
-from utils import plot_bn_models
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, Matern, ConstantKernel as C
 
 warnings.filterwarnings('ignore')
 logger.setLevel(logging.ERROR)
@@ -31,7 +29,7 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         parameter_kwargs (dict): Additional arguments for the parameter learning function.
     
     Returns:
-        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score).
+        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score),
         True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
     # Setup k-fold cross-validation
@@ -124,18 +122,16 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
 
 def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, structure_kwargs: dict = None) -> dict[str, any]:
     """
-    Perform k-fold cross-validation on a Gaussian Bayesian Network using structure and parameter learning functions,
-    querying each row individually for each fold. It continues even if a row causes an error and prints debug messages.
+    Perform k-fold cross-validation on a Gaussian Bayesian Network using structure and parameter learning functions, querying each row individually for each fold. It continues even if a row causes an error and prints debug messages.
     
     Parameters:
         df (DataFrame): The dataframe containing the data for the Bayesian Network.
         target (str): The target column name.
         nsplits (int): The number of splits for cross-validation. Defaults to 5.
-        structure_kwargs (dict): Additional arguments for the structure learning function, including 'methodtype' 
-                                  (either 'hc' for Hill Climbing or 'pc' for PC algorithm).
+        structure_kwargs (dict): Additional arguments for the structure learning function, including 'methodtype' (either 'hc' for Hill Climbing or 'pc' for PC algorithm).
     
     Returns:
-        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score).
+        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score),
         True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
     if structure_kwargs is None:
@@ -208,6 +204,86 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
     }
 
     # Compute confusion matrix based on all true and predicted labels
+    confusion = confusion_matrix(all_y_true, all_y_pred)
+
+    return metrics, confusion
+
+def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type: str = 'rbf', nsplits: int = 5) -> dict:
+    """
+    Perform k-fold cross-validation on a dataset using Gaussian Process regression for continuous evidence, converting the predictions to binary classification for a binary target.
+    
+    Parameters:
+        df (DataFrame): The dataframe containing the data.
+        target (str): The target column name (binary classification).
+        kernel_type (str): The kernel type to use ('rbf' for RBF kernel, 'matern' for Matern kernel). Defaults to 'rbf'.
+        nsplits (int): The number of splits for cross-validation. Defaults to 5.
+    
+    Returns:
+        dict: A dictionary containing average metrics (accuracy, precision, recall, f1_score) and the confusion matrix of all folds.
+    """
+    # Setup k-fold cross-validation
+    kf = KFold(n_splits=nsplits)
+    
+    # Lists to store performance metrics and confusion matrix data
+    accuracy_results = []
+    precision_results = []
+    recall_results = []
+    f1_results = []
+    
+    all_y_true = []
+    all_y_pred = []
+
+    # Define the kernels
+    if kernel_type == 'rbf':
+        kernel = C(1.0, (1e-4, 1e1)) * RBF(1.0, (1e-4, 1e1))  # RBF kernel
+    elif kernel_type == 'matern':
+        kernel = C(1.0, (1e-4, 1e1)) * Matern(length_scale=1.0, nu=1.5)  # Matern kernel
+    else:
+        raise ValueError("Invalid kernel_type. Choose 'rbf' or 'matern'.")
+
+    # Cross-validation loop
+    for fold, (train_index, test_index) in enumerate(kf.split(df)):
+        print(f"\nFold {fold+1}/{nsplits}")
+
+        # Split data into training and test sets
+        train_data, test_data = df.iloc[train_index], df.iloc[test_index]
+
+        # Separate features and target
+        X_train = train_data.drop(columns=[target])
+        y_train = train_data[target]
+        
+        X_test = test_data.drop(columns=[target])
+        y_test = test_data[target]
+        
+        # Initialize and fit Gaussian Process Regressor
+        gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, alpha=1e-2)
+        gp.fit(X_train, y_train)
+        
+        # Predict on the test set
+        y_pred_continuous, _ = gp.predict(X_test, return_std=True)
+
+        # Convert continuous predictions to binary using a threshold of 0.5
+        y_pred_binary = [1 if p > 0.5 else 0 for p in y_pred_continuous]
+        
+        # Append true and predicted values for metrics computation
+        all_y_true.extend(y_test.values)
+        all_y_pred.extend(y_pred_binary)
+
+        # Compute evaluation metrics for this fold
+        accuracy_results.append(accuracy_score(y_test, y_pred_binary))
+        precision_results.append(precision_score(y_test, y_pred_binary, average='binary'))
+        recall_results.append(recall_score(y_test, y_pred_binary, average='binary'))
+        f1_results.append(f1_score(y_test, y_pred_binary, average='binary'))
+
+    # Calculate average metrics across folds
+    metrics = {
+        'accuracy': np.mean(accuracy_results),
+        'precision': np.mean(precision_results),
+        'recall': np.mean(recall_results),
+        'f1_score': np.mean(f1_results)
+    }
+
+    # Compute the confusion matrix based on all true and predicted labels
     confusion = confusion_matrix(all_y_true, all_y_pred)
 
     return metrics, confusion
