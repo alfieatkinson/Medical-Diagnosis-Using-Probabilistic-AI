@@ -21,10 +21,32 @@ def freedman_diaconis_rule(data: np.ndarray) -> int:
     Returns:
         int: The calculated number of bins.
     """
+    # Remove NaN values
+    data = data[~np.isnan(data)]
+    
+    # If the data is constant (zero variance), return a default number of bins
+    if len(np.unique(data)) == 1:
+        print("Warning: Column has zero variance. Returning a default number of bins.")
+        return 10  # default value, you can adjust it
+    
+    # Calculate the IQR
     q25, q75 = np.percentile(data, [25, 75])
     iqr = q75 - q25
+
+    # Prevent division by zero if the IQR is zero
+    if iqr == 0:
+        print("Warning: IQR is zero. Returning a default number of bins.")
+        return 10  # default value, you can adjust it
+
+    # Calculate the bin width
     bin_width = 2 * iqr * len(data) ** (-1/3)
+
+    # Calculate the number of bins
     nbins = int(np.ceil((data.max() - data.min()) / bin_width))
+    
+    # Ensure at least one bin
+    nbins = max(nbins, 1)
+
     return nbins
 
 def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> pd.DataFrame:
