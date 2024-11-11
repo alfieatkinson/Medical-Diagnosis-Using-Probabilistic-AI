@@ -122,8 +122,8 @@ def plot_confusion_matrix(confusion: list[int], cmap='Blues'):
     """
     plt.figure(figsize=(8, 6))
     sns.heatmap(confusion, annot=True, fmt='d', cmap=cmap, 
-                xticklabels=['Predicted Negative', 'Predicted Positive'], 
-                yticklabels=['Actual Negative', 'Actual Positive'])
+                xticklabels=['Negative', 'Positive'], 
+                yticklabels=['Negative', 'Positive'])
     plt.title("Confusion Matrix")
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
