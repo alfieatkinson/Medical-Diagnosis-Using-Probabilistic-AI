@@ -169,6 +169,11 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         else:
             raise ValueError("Invalid methodtype in structure_kwargs. Choose 'hc' or 'pc'.")
 
+        # Check if 'Status' is in the learned model's edges
+        if target not in [edge[0] for edge in best_model.edges()] and target not in [edge[1] for edge in best_model.edges()]:
+            print(f"Skipping fold {fold+1} as 'Status' is not in the learned model.")
+            continue  # Skip this fold if 'Status' is not in the model
+
         # Using Linear Gaussian Bayesian Network for continuous data
         learned_model = LinearGaussianBayesianNetwork(best_model.edges()) 
         learned_model.fit(train_data)
@@ -180,7 +185,7 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         variable_order, means, var = learned_model.predict(df_predict)
 
         # The 'means' variable contains the predicted values for all target variables
-        pred = means[:, variable_order.index(target)]  # Extract the predicted values for the target column
+        pred = means[:, variable_order.index(target)]  # Extract predicted values for 'Status'
         all_y_true.extend(test_data[target].values)
 
         # Threshold the continuous predicted values to binary classification
