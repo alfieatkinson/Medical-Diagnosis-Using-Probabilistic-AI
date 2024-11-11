@@ -3,10 +3,15 @@ import logging
 import pandas as pd 
 import numpy as np 
 import bnlearn as bn
+import pgmpy.models as pm
+import pgmpy.factors.continuous as cf
 from pgmpy.global_vars import logger
 from sklearn.model_selection import KFold
-from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from pgmpy.estimators import MaximumLikelihoodEstimator, HillClimbSearch, PC, BDeuScore
+from pgmpy.models import LinearGaussianBayesianNetwork
+from pgmpy.inference import VariableElimination
+from utils import plot_bn_models
 
 warnings.filterwarnings('ignore')
 logger.setLevel(logging.ERROR)
@@ -115,4 +120,89 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
     # Return metrics and confusion matrix data (true and predicted values)
     confusion = confusion_matrix(all_y_true, all_y_pred)
     
+    return metrics, confusion
+
+def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, structure_kwargs: dict = None) -> dict[str, any]:
+    """
+    Perform k-fold cross-validation on a Gaussian Bayesian Network using structure and parameter learning functions,
+    querying each row individually for each fold. It continues even if a row causes an error and prints debug messages.
+    
+    Parameters:
+        df (DataFrame): The dataframe containing the data for the Bayesian Network.
+        target (str): The target column name.
+        nsplits (int): The number of splits for cross-validation. Defaults to 5.
+        structure_kwargs (dict): Additional arguments for the structure learning function, including 'methodtype' 
+                                  (either 'hc' for Hill Climbing or 'pc' for PC algorithm).
+    
+    Returns:
+        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score).
+        True labels and predicted labels for all folds, which can be used for confusion matrix.
+    """
+    if structure_kwargs is None:
+        structure_kwargs = {}
+
+    kf = KFold(n_splits=nsplits)
+
+    accuracy_results = []
+    precision_results = []
+    recall_results = []
+    f1_results = []
+
+    # List to store all true and predicted labels for confusion matrix
+    all_y_true = []
+    all_y_pred = []
+
+    for fold, (train_index, test_index) in enumerate(kf.split(df)):
+        print(f"\nFold {fold+1}/{nsplits}")
+
+        train_data, test_data = df.iloc[train_index], df.iloc[test_index]
+
+        # Choose structure learning method
+        if structure_kwargs.get('methodtype', 'hc') == 'hc':
+            print("Using Hill Climbing with BDEU Score for structure learning.")
+            hc_search = HillClimbSearch(train_data)
+            best_model = hc_search.estimate(scoring_method=BDeuScore(train_data))
+        elif structure_kwargs.get('methodtype', 'hc') == 'pc':
+            print("Using PC Algorithm for structure learning.")
+            pc_search = PC(train_data)
+            best_model = pc_search.estimate()
+        else:
+            raise ValueError("Invalid methodtype in structure_kwargs. Choose 'hc' or 'pc'.")
+
+        # Using Linear Gaussian Bayesian Network for continuous data
+        learned_model = LinearGaussianBayesianNetwork(best_model.edges()) 
+        learned_model.fit(train_data)
+
+        # Predict using the learned model
+        df_predict = test_data.drop([target], axis=1)  # Drop the target column for prediction
+
+        # Get the predicted means and variances for all variables
+        variable_order, means, var = learned_model.predict(df_predict)
+
+        # The 'means' variable contains the predicted values for all target variables
+        pred = means[:, variable_order.index(target)]  # Extract the predicted values for the target column
+        all_y_true.extend(test_data[target].values)
+
+        # Threshold the continuous predicted values to binary classification
+        pred_binary = [1 if p > 0.5 else 0 for p in pred]  # Apply a 0.5 threshold to convert to binary
+
+        all_y_pred.extend(pred_binary)
+
+        # Evaluation metrics for this fold
+        accuracy_results.append(accuracy_score(all_y_true, all_y_pred))
+        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary'))
+        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary'))
+        f1_results.append(f1_score(all_y_true, all_y_pred, average='binary'))
+
+    # Average metrics across folds
+    metrics = {
+        'accuracy': sum(accuracy_results) / nsplits,
+        'precision': sum(precision_results) / nsplits,
+        'recall': sum(recall_results) / nsplits,
+        'f1_score': sum(f1_results) / nsplits
+    }
+
+    # Compute confusion matrix based on all true and predicted labels
+    confusion = confusion_matrix(all_y_true, all_y_pred)
+
     return metrics, confusion
