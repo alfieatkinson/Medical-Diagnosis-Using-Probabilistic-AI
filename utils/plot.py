@@ -177,8 +177,8 @@ def plot_confusion_matrices(confusion_dict: dict[str, list[int]], max_plots_per_
 
         # Plot the confusion matrix using a heatmap
         sns.heatmap(confusion, annot=True, fmt='d', cmap=cmap, 
-                    xticklabels=['Predicted Negative', 'Predicted Positive'], 
-                    yticklabels=['Actual Negative', 'Actual Positive'], ax=ax)
+                    xticklabels=['Negative', 'Positive'], 
+                    yticklabels=['Negative', 'Positive'], ax=ax)
         ax.set_xlabel('Predicted')
         ax.set_ylabel('Actual')
         ax.set_title(title)
