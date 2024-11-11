@@ -71,23 +71,51 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
             num_bins = unique_vals
         return pd.cut(column, bins=num_bins, labels=False)
 
-    if nbins is not None:
-        for col in df.select_dtypes(include=[np.number]).columns:
-            df[col] = assign_bins(df[col], nbins)
-        return df
+    df_copy = df.copy()
+
+    # Skip target variable (Status) and only discretise features
+    feature_columns = [col for col in df_copy.columns if col != 'Status' and col != 'Group']
     
-    for col in df.select_dtypes(include=[np.number]).columns:
-        if df[col].nunique() == 1:
-            df[col] = assign_bins(df[col], 1)
+    if nbins is not None:
+        for col in feature_columns:
+            if df_copy[col].nunique() > 1:  # Skip columns with only one unique value
+                df_copy[col] = assign_bins(df_copy[col], nbins)
+        return df_copy
+    
+    # Apply the chosen binning method
+    for col in feature_columns:
+        if df_copy[col].nunique() <= 1:  # Skip columns with only one unique value
+            continue
+        
+        if df_copy[col].nunique() <= 2:  # Skip columns with very few unique values (e.g., binary columns)
             continue
         
         if method == 'sturges':
-            num_bins = sturges_formula(len(df[col]))
+            num_bins = sturges_formula(len(df_copy[col]))
         elif method == 'freedman-diaconis':
-            num_bins = freedman_diaconis_rule(df[col])
+            num_bins = freedman_diaconis_rule(df_copy[col])
         else:
             raise ValueError("Method must be 'sturges' or 'freedman-diaconis'.")
         
-        df[col] = assign_bins(df[col], num_bins)
+        df_copy[col] = assign_bins(df_copy[col], num_bins)
     
-    return df
+    return df_copy
+
+def discretise_query(query, df, method):
+    for col in query:
+        if col in df.columns:
+            # Skip columns that are categorical (like 'Status') or already discrete
+            if df[col].dtype == 'object' or len(df[col].unique()) <= 2:  # Categorical or binary
+                continue
+            
+            if method == 'sturges':
+                num_bins = sturges_formula(len(df[col]))
+            elif method == 'freedman-diaconis':
+                num_bins = freedman_diaconis_rule(df[col])
+            else:
+                raise ValueError("Method must be 'sturges' or 'freedman-diaconis'.")
+            
+            # Discretise the query value based on the number of bins for that column
+            query[col] = pd.cut([query[col]], bins=num_bins, labels=False)[0]
+    
+    return query
