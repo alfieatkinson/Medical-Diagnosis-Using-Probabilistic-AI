@@ -1,15 +1,20 @@
 import warnings
 import logging
-import pandas as pd 
-import numpy as np 
+import pandas as pd
+import numpy as np
 import bnlearn as bn
 from pgmpy.global_vars import logger
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
+    confusion_matrix, brier_score_loss, log_loss
+)
 from pgmpy.estimators import HillClimbSearch, PC, BDeuScore
-from pgmpy.models import LinearGaussianBayesianNetwork
+from pgmpy.models import BayesianModel, LinearGaussianBayesianNetwork
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, ConstantKernel as C
+from scipy.stats import entropy
+import time
 
 warnings.filterwarnings('ignore')
 logger.setLevel(logging.ERROR)
@@ -19,19 +24,29 @@ logging.getLogger('pandas').setLevel(logging.ERROR)
 
 def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, structure_kwargs: dict = None, parameter_kwargs: dict = None) -> dict[str, any]:
     """
-    Perform k-fold cross-validation on a Bayesian Network using structure and parameter learning functions, querying each row individually for each fold. It continues even if a row causes an error and prints debug messages.
+    Perform k-fold cross-validation using Bayesian Networks for discrete data.
     
     Parameters:
-        df (DataFrame): The dataframe containing the data for the Bayesian Network.
+        df (DataFrame): The dataframe containing the data.
         target (str): The target column name.
         nsplits (int): The number of splits for cross-validation. Defaults to 5.
-        structure_kwargs (dict): Additional arguments for the structure learning function.
-        parameter_kwargs (dict): Additional arguments for the parameter learning function.
     
     Returns:
-        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score),
-        True labels and predicted labels for all folds, which can be used for confusion matrix.
+        dict: A dictionary containing:
+            - metrics (dict): A dictionary of average performance metrics:
+                - classification (dict): Classification metrics:
+                    - accuracy (float)
+                    - precision (float)
+                    - recall (float)
+                    - f1_score (float)
+                - roc_auc (float)
+                - brier_score (float)
+                - log_loss (float)
+            - confusion_matrix (array): Confusion matrix of all folds.
+            - time_taken (float): Time taken for the entire cross-validation process in seconds.
     """
+    start_time = time.time()  # Track the start time of the cross-validation
+    
     # Setup k-fold cross-validation
     kf = KFold(n_splits=nsplits)
     
@@ -40,8 +55,10 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
     precision_results = []
     recall_results = []
     f1_results = []
-    
-    # Lists to store true and predicted values for all folds
+    roc_auc_results = []
+    brier_score_results = []
+    log_loss_results = []
+
     all_y_true = []
     all_y_pred = []
     
@@ -70,6 +87,10 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         test_columns = test_data.columns.tolist()
         columns_to_drop = [col for col in test_columns if col not in model_nodes]
         test_data_filtered = test_data.drop(columns=columns_to_drop)
+        
+        # Reset lists for true and predicted values at the start of each fold
+        fold_y_true = []
+        fold_y_pred = []
         
         # Loop over each row in the test set and predict individually
         for idx, row in test_data_filtered.iterrows():
@@ -103,22 +124,46 @@ def discrete_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         
         # Compute evaluation metrics for this fold
         accuracy_results.append(accuracy_score(all_y_true, all_y_pred))
-        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary'))
-        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary'))
+        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary', zero_division=1))
+        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary', zero_division=1))
         f1_results.append(f1_score(all_y_true, all_y_pred, average='binary'))
-    
-    # Return average metrics across folds
+        
+        try:
+            roc_auc_results.append(roc_auc_score(all_y_true, all_y_pred))
+        except ValueError as e:
+            print(f"Cannot calculate auc score for this fold: {e}")
+        
+        brier_score_results.append(brier_score_loss(all_y_true, all_y_pred))
+        try:
+            log_loss_results.append(log_loss(all_y_true, all_y_pred))
+        except ValueError as e:
+            print(f"Cannot calculate log loss for this fold: {e}")
+
+    # Compute average metrics across folds
     metrics = {
-        'accuracy': sum(accuracy_results) / nsplits,
-        'precision': sum(precision_results) / nsplits,
-        'recall': sum(recall_results) / nsplits,
-        'f1_score': sum(f1_results) / nsplits
+        'classification': {
+            'accuracy': np.mean(accuracy_results),
+            'precision': np.mean(precision_results),
+            'recall': np.mean(recall_results),
+            'f1_score': np.mean(f1_results),
+        },
+        'roc_auc': np.mean(roc_auc_results) if roc_auc_results else np.nan,
+        'brier_score': np.mean(brier_score_results),
+        'log_loss': np.mean(log_loss_results) if log_loss_results else np.nan
     }
     
-    # Return metrics and confusion matrix data (true and predicted values)
+    # Compute confusion matrix
     confusion = confusion_matrix(all_y_true, all_y_pred)
     
-    return metrics, confusion
+    # Calculate the time taken for the whole cross-validation process
+    time_taken = time.time() - start_time
+    
+    # Return metrics, confusion matrix, and time taken
+    return {
+        'metrics': metrics,
+        'confusion_matrix': confusion,
+        'time_taken': time_taken
+    }
 
 def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, structure_kwargs: dict = None) -> dict[str, any]:
     """
@@ -131,7 +176,7 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
         structure_kwargs (dict): Additional arguments for the structure learning function, including 'methodtype' (either 'hc' for Hill Climbing or 'pc' for PC algorithm).
     
     Returns:
-        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score),
+        A dictionary of average performance metrics (e.g., accuracy, precision, recall, F1 score, ROC AUC, Brier score, Log Loss),
         True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
     if structure_kwargs is None:
@@ -143,10 +188,16 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
     precision_results = []
     recall_results = []
     f1_results = []
+    roc_auc_results = []
+    brier_score_results = []
+    log_loss_results = []
 
     # List to store all true and predicted labels for confusion matrix
     all_y_true = []
     all_y_pred = []
+
+    # Start timer for cross-validation
+    start_time = time.time()
 
     for fold, (train_index, test_index) in enumerate(kf.split(df)):
         print(f"\nFold {fold+1}/{nsplits}")
@@ -191,45 +242,72 @@ def gaussian_cross_validation(df: pd.DataFrame, target: str, nsplits: int = 5, s
 
         # Evaluation metrics for this fold
         accuracy_results.append(accuracy_score(all_y_true, all_y_pred))
-        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary'))
-        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary'))
+        precision_results.append(precision_score(all_y_true, all_y_pred, average='binary', zero_division=1))
+        recall_results.append(recall_score(all_y_true, all_y_pred, average='binary', zero_division=1))
         f1_results.append(f1_score(all_y_true, all_y_pred, average='binary'))
+        try:
+            roc_auc_results.append(roc_auc_score(all_y_true, all_y_pred))
+        except ValueError as e:
+            print(f"Cannot calculate auc score for this fold: {e}")
+        brier_score_results.append(brier_score_loss(all_y_true, pred))
+        try:
+            log_loss_results.append(log_loss(all_y_true, pred))
+        except ValueError:
+            print(f"Cannot calculate log loss for this fold: {e}")
 
-    # Average metrics across folds
+    # Compute average metrics across folds
     metrics = {
-        'accuracy': sum(accuracy_results) / nsplits,
-        'precision': sum(precision_results) / nsplits,
-        'recall': sum(recall_results) / nsplits,
-        'f1_score': sum(f1_results) / nsplits
+        'classification': {
+            'accuracy': np.mean(accuracy_results),
+            'precision': np.mean(precision_results),
+            'recall': np.mean(recall_results),
+            'f1_score': np.mean(f1_results),
+        },
+        'roc_auc': np.mean(roc_auc_results) if roc_auc_results else np.nan,
+        'brier_score': np.mean(brier_score_results),
+        'log_loss': np.mean(log_loss_results) if log_loss_results else np.nan
+    }
+    
+    # Compute confusion matrix
+    confusion = confusion_matrix(all_y_true, all_y_pred)
+    
+    # Calculate the time taken for the whole cross-validation process
+    time_taken = time.time() - start_time
+    
+    # Return metrics, confusion matrix, and time taken
+    return {
+        'metrics': metrics,
+        'confusion_matrix': confusion,
+        'time_taken': time_taken
     }
 
-    # Compute confusion matrix based on all true and predicted labels
-    confusion = confusion_matrix(all_y_true, all_y_pred)
-
-    return metrics, confusion
-
-def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type: str = 'rbf', nsplits: int = 5) -> dict:
+def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type: str = 'rbf', nsplits: int = 5) -> dict[str, any]:
     """
-    Perform k-fold cross-validation on a dataset using Gaussian Process regression for continuous evidence, converting the predictions to binary classification for a binary target.
-    
+    Perform k-fold cross-validation on a dataset using Gaussian Process regression for continuous evidence, 
+    converting the predictions to binary classification for a binary target.
+
     Parameters:
         df (DataFrame): The dataframe containing the data.
         target (str): The target column name (binary classification).
         kernel_type (str): The kernel type to use ('rbf' for RBF kernel, 'matern' for Matern kernel). Defaults to 'rbf'.
         nsplits (int): The number of splits for cross-validation. Defaults to 5.
-    
+
     Returns:
-        dict: A dictionary containing average metrics (accuracy, precision, recall, f1_score) and the confusion matrix of all folds.
+        A dictionary containing average performance metrics (accuracy, precision, recall, f1_score, ROC AUC, Brier score, Log Loss),
+        True labels and predicted labels for all folds, which can be used for confusion matrix.
     """
     # Setup k-fold cross-validation
     kf = KFold(n_splits=nsplits)
     
-    # Lists to store performance metrics and confusion matrix data
+    # Lists to store performance metrics
     accuracy_results = []
     precision_results = []
     recall_results = []
     f1_results = []
-    
+    roc_auc_results = []
+    brier_score_results = []
+    log_loss_results = []
+
     all_y_true = []
     all_y_pred = []
 
@@ -240,6 +318,9 @@ def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type
         kernel = C(1.0, (1e-4, 1e1)) * Matern(length_scale=1.0, nu=1.5)  # Matern kernel
     else:
         raise ValueError("Invalid kernel_type. Choose 'rbf' or 'matern'.")
+
+    # Start timer for cross-validation
+    start_time = time.time()
 
     # Cross-validation loop
     for fold, (train_index, test_index) in enumerate(kf.split(df)):
@@ -261,6 +342,9 @@ def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type
         
         # Predict on the test set
         y_pred_continuous, _ = gp.predict(X_test, return_std=True)
+        
+        # Apply sigmoid to map continuous predictions to [0, 1]
+        y_pred_continuous = 1 / (1 + np.exp(-y_pred_continuous))
 
         # Convert continuous predictions to binary using a threshold of 0.5
         y_pred_binary = [1 if p > 0.5 else 0 for p in y_pred_continuous]
@@ -274,16 +358,38 @@ def gaussian_process_cross_validation(df: pd.DataFrame, target: str, kernel_type
         precision_results.append(precision_score(y_test, y_pred_binary, average='binary'))
         recall_results.append(recall_score(y_test, y_pred_binary, average='binary'))
         f1_results.append(f1_score(y_test, y_pred_binary, average='binary'))
+        try:
+            roc_auc_results.append(roc_auc_score(all_y_true, all_y_pred))
+        except ValueError as e:
+            print(f"Cannot calculate auc score for this fold: {e}")
+        brier_score_results.append(brier_score_loss(y_test, y_pred_continuous))
+        try:
+            log_loss_results.append(log_loss(y_test, y_pred_continuous))
+        except ValueError as e:
+            print(f"Cannot calculate log loss for this fold: {e}")
 
-    # Calculate average metrics across folds
+    # Compute average metrics across folds
     metrics = {
-        'accuracy': np.mean(accuracy_results),
-        'precision': np.mean(precision_results),
-        'recall': np.mean(recall_results),
-        'f1_score': np.mean(f1_results)
+        'classification': {
+            'accuracy': np.mean(accuracy_results),
+            'precision': np.mean(precision_results),
+            'recall': np.mean(recall_results),
+            'f1_score': np.mean(f1_results),
+        },
+        'roc_auc': np.mean(roc_auc_results) if roc_auc_results else np.nan,
+        'brier_score': np.mean(brier_score_results),
+        'log_loss': np.mean(log_loss_results) if log_loss_results else np.nan
     }
-
-    # Compute the confusion matrix based on all true and predicted labels
+    
+    # Compute confusion matrix
     confusion = confusion_matrix(all_y_true, all_y_pred)
 
-    return metrics, confusion
+    # Calculate the time taken for the whole cross-validation process
+    time_taken = time.time() - start_time
+    
+    # Return metrics, confusion matrix, and time taken
+    return {
+        'metrics': metrics,
+        'confusion_matrix': confusion,
+        'time_taken': time_taken
+    }
