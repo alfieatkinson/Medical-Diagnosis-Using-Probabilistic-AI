@@ -12,7 +12,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.9443587278881223
             Brier_score: 0.05755558199680625
             Log_loss: 2.0745134481017957
-        Time Taken: 39.26 seconds
+        Time Taken: 41.55 seconds
         Confusion Matrix: [201   3]
                             [ 17 174]
 
@@ -26,7 +26,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.6807322746687318
             Brier_score: 0.3315589251265152
             Log_loss: 11.950594975328361
-        Time Taken: 6.14 seconds
+        Time Taken: 5.60 seconds
         Confusion Matrix: [204   0]
                             [120  71]
 
@@ -40,7 +40,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.9443587278881223
             Brier_score: 0.05755558199680625
             Log_loss: 2.0745134481017957
-        Time Taken: 37.92 seconds
+        Time Taken: 38.72 seconds
         Confusion Matrix: [201   3]
                             [ 17 174]
 
@@ -54,7 +54,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.6807322746687318
             Brier_score: 0.3315589251265152
             Log_loss: 11.950594975328361
-        Time Taken: 5.88 seconds
+        Time Taken: 5.73 seconds
         Confusion Matrix: [204   0]
                             [120  71]
 
@@ -68,7 +68,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.9443587278881223
             Brier_score: 0.05755558199680625
             Log_loss: 2.0745134481017957
-        Time Taken: 39.70 seconds
+        Time Taken: 38.43 seconds
         Confusion Matrix: [201   3]
                             [ 17 174]
 
@@ -82,7 +82,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.6807322746687318
             Brier_score: 0.3315589251265152
             Log_loss: 11.950594975328361
-        Time Taken: 6.28 seconds
+        Time Taken: 6.10 seconds
         Confusion Matrix: [204   0]
                             [120  71]
 
@@ -98,7 +98,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.7874958507950487
             Brier_score: 0.20853999498314355
             Log_loss: 7.516543296940656
-        Time Taken: 44.58 seconds
+        Time Taken: 48.43 seconds
         Confusion Matrix: [135  12]
                             [44 95]
 
@@ -112,7 +112,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.635602393220427
             Brier_score: 0.3556900431067776
             Log_loss: 12.82036862770083
-        Time Taken: 8.61 seconds
+        Time Taken: 7.65 seconds
         Confusion Matrix: [139   8]
                             [94 45]
 
@@ -126,7 +126,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.7874958507950487
             Brier_score: 0.20853999498314355
             Log_loss: 7.516543296940656
-        Time Taken: 39.53 seconds
+        Time Taken: 36.36 seconds
         Confusion Matrix: [135  12]
                             [44 95]
 
@@ -140,7 +140,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.635602393220427
             Brier_score: 0.3556900431067776
             Log_loss: 12.82036862770083
-        Time Taken: 8.19 seconds
+        Time Taken: 6.56 seconds
         Confusion Matrix: [139   8]
                             [94 45]
 
@@ -154,7 +154,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.7874958507950487
             Brier_score: 0.20853999498314355
             Log_loss: 7.516543296940656
-        Time Taken: 41.68 seconds
+        Time Taken: 37.55 seconds
         Confusion Matrix: [135  12]
                             [44 95]
 
@@ -168,7 +168,7 @@ Discrete Bayesian Networks
             Roc_auc: 0.635602393220427
             Brier_score: 0.3556900431067776
             Log_loss: 12.82036862770083
-        Time Taken: 6.65 seconds
+        Time Taken: 7.50 seconds
         Confusion Matrix: [139   8]
                             [94 45]
 
