@@ -1,5 +1,5 @@
-import pandas as pd 
-import numpy as np 
+import pandas as pd
+import numpy as np
 
 def sturges_formula(n: int) -> int:
     """Calculate the number of bins for a histogram using Sturges' formula.
@@ -21,13 +21,10 @@ def freedman_diaconis_rule(data: np.ndarray) -> int:
     Returns:
         int: The calculated number of bins.
     """
-    # Remove NaN values
-    data = data[~np.isnan(data)]
-    
     # If the data is constant (zero variance), return a default number of bins
     if len(np.unique(data)) == 1:
         print("Warning: Column has zero variance. Returning a default number of bins.")
-        return 10  # default value, you can adjust it
+        return 1
     
     # Calculate the IQR
     q25, q75 = np.percentile(data, [25, 75])
@@ -36,7 +33,7 @@ def freedman_diaconis_rule(data: np.ndarray) -> int:
     # Prevent division by zero if the IQR is zero
     if iqr == 0:
         print("Warning: IQR is zero. Returning a default number of bins.")
-        return 10  # default value, you can adjust it
+        return 10
 
     # Calculate the bin width
     bin_width = 2 * iqr * len(data) ** (-1/3)
@@ -48,6 +45,22 @@ def freedman_diaconis_rule(data: np.ndarray) -> int:
     nbins = max(nbins, 1)
 
     return nbins
+
+def assign_bins(column: pd.Series, num_bins: int) -> pd.Series:
+    """Assign bins to a numerical column.
+
+    Parameters:
+        column (pd.Series): The numerical column to be binned.
+        num_bins (int): The number of bins to use.
+
+    Returns:
+        pd.Series: The binned column.
+    """
+    unique_vals = column.nunique()
+    if num_bins > unique_vals:
+        num_bins = unique_vals
+    bin_edges = np.linspace(column.min(), column.max(), num=num_bins+1)
+    return pd.cut(column, bins=bin_edges, labels=range(num_bins), include_lowest=True)
 
 def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> pd.DataFrame:
     """Discretise numerical columns in a DataFrame into bins based on the specified method.
@@ -63,37 +76,23 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
     Raises:
         ValueError: If an invalid method is specified.
     """
-    
-    def assign_bins(column: pd.Series, num_bins: int) -> pd.Series:
-        """Helper function to assign bins to a numerical column."""
-        unique_vals = column.nunique()
-        if num_bins > unique_vals:
-            num_bins = unique_vals
-        return pd.cut(column, bins=num_bins, labels=False)
-
     df_copy = df.copy()
-
-    # Skip target variable (Status) and only discretise features
-    feature_columns = [col for col in df_copy.columns if col != 'Status' and col != 'Group']
+    feature_columns = df_copy.columns.tolist()
     
     if nbins is not None:
         for col in feature_columns:
-            if df_copy[col].nunique() > 1:  # Skip columns with only one unique value
+            if df_copy[col].nunique() > 1:
                 df_copy[col] = assign_bins(df_copy[col], nbins)
         return df_copy
     
-    # Apply the chosen binning method
     for col in feature_columns:
-        if df_copy[col].nunique() <= 1:  # Skip columns with only one unique value
-            continue
-        
-        if df_copy[col].nunique() <= 2:  # Skip columns with very few unique values (e.g., binary columns)
+        if df_copy[col].nunique() <= 1:
             continue
         
         if method == 'sturges':
             num_bins = sturges_formula(len(df_copy[col]))
         elif method == 'freedman-diaconis':
-            num_bins = freedman_diaconis_rule(df_copy[col])
+            num_bins = freedman_diaconis_rule(df_copy[col].astype(float).values)
         else:
             raise ValueError("Method must be 'sturges' or 'freedman-diaconis'.")
         
@@ -101,21 +100,31 @@ def discretise(df: pd.DataFrame, method: str = 'sturges', nbins: int = None) -> 
     
     return df_copy
 
-def discretise_query(query, df, method):
+def discretise_query(query: dict, df: pd.DataFrame, method: str) -> dict:
+    """Discretise the query values based on the binning of the training DataFrame.
+
+    Parameters:
+        query (dict): The query values to be discretised.
+        df (pd.DataFrame): The training DataFrame used to determine the bins.
+        method (str): The method to use for determining the number of bins ('sturges' or 'freedman-diaconis').
+
+    Returns:
+        dict: The discretised query values.
+    
+    Raises:
+        ValueError: If an invalid method is specified.
+    """
+    query_copy = query.copy()
     for col in query:
         if col in df.columns:
-            # Skip columns that are categorical (like 'Status') or already discrete
-            if df[col].dtype == 'object' or len(df[col].unique()) <= 2:  # Categorical or binary
-                continue
-            
             if method == 'sturges':
                 num_bins = sturges_formula(len(df[col]))
             elif method == 'freedman-diaconis':
-                num_bins = freedman_diaconis_rule(df[col])
+                num_bins = freedman_diaconis_rule(df[col].astype(float).values)
             else:
                 raise ValueError("Method must be 'sturges' or 'freedman-diaconis'.")
             
-            # Discretise the query value based on the number of bins for that column
-            query[col] = pd.cut([query[col]], bins=num_bins, labels=False)[0]
+            bins = np.linspace(df[col].min(), df[col].max(), num=num_bins+1)
+            query_copy[col] = pd.cut([query[col]], bins=bins, labels=range(num_bins), include_lowest=True)[0]
     
-    return query
+    return query_copy
